@@ -179,7 +179,7 @@ func dependencySlots(dep Dependency) ([]slotKey, error) {
 		return dedupeSlots(outSlots), nil
 	}
 
-	group := dependencyGroup(dep)
+	group, flatten := dependencyGroupInfo(dep)
 	name := ""
 	if dep.name != nil {
 		name = *dep.name
@@ -198,7 +198,11 @@ func dependencySlots(dep Dependency) ([]slotKey, error) {
 		if t == nil {
 			continue
 		}
-		slots = append(slots, slotKey{t: t, name: name, group: group})
+		slotType := t
+		if group != "" && flatten && slotType.Kind() == reflect.Slice {
+			slotType = slotType.Elem()
+		}
+		slots = append(slots, slotKey{t: slotType, name: name, group: group})
 	}
 
 	return dedupeSlots(slots), nil
@@ -249,13 +253,14 @@ func parseProvideOutStructSlots(t reflect.Type) ([]slotKey, bool, error) {
 		}
 
 		name := field.Tag.Get("name")
-		group := field.Tag.Get("group")
+		groupTag := field.Tag.Get("group")
+		group, flatten := parseGroupTag(groupTag)
 		if group != "" {
 			name = ""
 		}
 
 		fieldType := field.Type
-		if group != "" && fieldType.Kind() == reflect.Slice {
+		if group != "" && fieldType.Kind() == reflect.Slice && flatten {
 			fieldType = fieldType.Elem()
 		}
 
@@ -369,13 +374,18 @@ func validateDecorateDependency(dep Dependency) error {
 }
 
 func dependencyGroup(dep Dependency) string {
+	group, _ := dependencyGroupInfo(dep)
+	return group
+}
+
+func dependencyGroupInfo(dep Dependency) (group string, flatten bool) {
 	if dep.IsRunnable() {
-		return runnableGroup
+		return runnableGroup, false
 	}
 	if dep.group != nil {
-		return *dep.group
+		return parseGroupTag(*dep.group)
 	}
-	return ""
+	return "", false
 }
 
 func slotLabel(slot slotKey) string {

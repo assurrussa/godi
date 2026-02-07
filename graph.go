@@ -487,7 +487,8 @@ func derefString(v *string) string {
 
 func depGroup(dep Dependency) string {
 	if dep.group != nil {
-		return *dep.group
+		group, _ := parseGroupTag(*dep.group)
+		return group
 	}
 	if dep.IsRunnable() {
 		return runnableGroup
@@ -648,7 +649,8 @@ func parseDigInFields(t reflect.Type) []GraphToken {
 		}
 
 		name := field.Tag.Get("name")
-		group := field.Tag.Get("group")
+		groupTag := field.Tag.Get("group")
+		group, _ := parseGroupTag(groupTag)
 		optional := field.Tag.Get("optional") == "true"
 		if group != "" {
 			name = ""

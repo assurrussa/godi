@@ -53,3 +53,20 @@ func isPointerToInterface(a any) bool {
 
 	return pType.Elem().Kind() == reflect.Interface
 }
+
+func parseGroupTag(tag string) (group string, flatten bool) {
+	tag = strings.TrimSpace(tag)
+	if tag == "" {
+		return "", false
+	}
+
+	parts := strings.Split(tag, ",")
+	group = strings.TrimSpace(parts[0])
+	for _, p := range parts[1:] {
+		if strings.TrimSpace(p) == "flatten" {
+			flatten = true
+		}
+	}
+
+	return group, flatten
+}
