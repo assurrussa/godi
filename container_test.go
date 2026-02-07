@@ -31,8 +31,8 @@ func TestContainerReplaceOverridesProvide(t *testing.T) {
 	t.Parallel()
 
 	deps := godi.CollectDependencies(
-		godi.NewDependency(func() string { return "base" }),
-		godi.Replace(func() string { return "override" }),
+		godi.NewDependency(func() string { return testBase }),
+		godi.Replace(func() string { return testOverride }),
 	)
 
 	cnt, err := godi.NewContainer(godi.WithDependencies(deps))
@@ -44,7 +44,7 @@ func TestContainerReplaceOverridesProvide(t *testing.T) {
 	if err := cnt.Invoke(func(v string) { got = v }); err != nil {
 		t.Fatalf("Invoke error: %v", err)
 	}
-	if got != "override" {
+	if got != testOverride {
 		t.Fatalf("expected replacement to win, got %q", got)
 	}
 }
@@ -86,7 +86,7 @@ func TestContainerDecorateSuccess(t *testing.T) {
 	t.Parallel()
 
 	deps := godi.CollectDependencies(
-		godi.NewDependency(func() string { return "base" }),
+		godi.NewDependency(func() string { return testBase }),
 		godi.Decorate(func(s string) string { return s + "!" }),
 	)
 

@@ -18,7 +18,7 @@ func TestDecorateWithDigOutNamedSlot(t *testing.T) {
 
 	cnt, err := godi.NewContainer(godi.WithDependencies(
 		godi.CollectDependencies(
-			godi.NewDependency(func() string { return "base" }, godi.WithName("n")),
+			godi.NewDependency(func() string { return testBase }, godi.WithName(testNameN)),
 			godi.Decorate(func(in struct {
 				dig.In
 				S string `name:"n"`

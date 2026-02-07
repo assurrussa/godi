@@ -29,7 +29,7 @@ func TestBuildGraphDecoratorChainEdges(t *testing.T) {
 	t.Parallel()
 
 	deps := godi.CollectDependencies(
-		godi.NewDependency(func() string { return "base" }),
+		godi.NewDependency(func() string { return testBase }),
 		godi.Decorate(func(s string) string { return s + "1" }),
 		godi.Decorate(func(s string) string { return s + "2" }),
 	)
@@ -62,7 +62,7 @@ func TestBuildGraphDecoratorChainEdges(t *testing.T) {
 	var hasD1, hasD2 bool
 	for i := range g.Edges {
 		e := g.Edges[i]
-		if e.Type != "string" || e.Name != "" || e.Group != "" || e.Missing {
+		if e.Type != testTypeString || e.Name != "" || e.Group != "" || e.Missing {
 			continue
 		}
 		if e.From == d1.ID {
@@ -118,7 +118,7 @@ func TestGraphModulesShowsPrivateProvidersInModuleGraphOnly(t *testing.T) {
 
 	var rootStrings int
 	for _, p := range root.Providers {
-		if p.Type == "string" && p.Kind != kindDecorate {
+		if p.Type == testTypeString && p.Kind != kindDecorate {
 			rootStrings++
 		}
 	}
@@ -128,10 +128,10 @@ func TestGraphModulesShowsPrivateProvidersInModuleGraphOnly(t *testing.T) {
 
 	var modStrings, modReplaces int
 	for _, p := range mod.Providers {
-		if p.Type == "string" && p.Kind != kindDecorate {
+		if p.Type == testTypeString && p.Kind != kindDecorate {
 			modStrings++
 		}
-		if p.Type == "string" && p.Kind == kindReplace {
+		if p.Type == testTypeString && p.Kind == kindReplace {
 			modReplaces++
 		}
 	}

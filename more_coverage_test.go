@@ -93,8 +93,8 @@ func TestDecorateRejectsWithNameOption(t *testing.T) {
 
 	_, err := godi.NewContainer(godi.WithDependencies(
 		godi.CollectDependencies(
-			godi.NewDependency(func() string { return "base" }),
-			godi.Decorate(func(s string) string { return s + "!" }, godi.WithName("n")),
+			godi.NewDependency(func() string { return testBase }),
+			godi.Decorate(func(s string) string { return s + "!" }, godi.WithName(testNameN)),
 		),
 	))
 	if err == nil {
@@ -120,7 +120,7 @@ func TestDependencyExposedTypesUnwrapsDigOut(t *testing.T) {
 	for _, t0 := range types {
 		got[t0.String()] = true
 	}
-	if !got["string"] || !got["int"] {
+	if !got[testTypeString] || !got[testTypeInt] {
 		t.Fatalf("expected exposed types [string int], got %v", got)
 	}
 }
