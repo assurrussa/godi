@@ -261,7 +261,8 @@ func TestProvideDigOutSlots(t *testing.T) {
 		dig.In
 		Named string `name:"named"`
 		Items []int  `group:"items"`
-	}) {
+	},
+	) {
 		gotName = in.Named
 		gotItems = in.Items
 	}); err != nil {
