@@ -344,13 +344,11 @@ func (g Graph) DOT() string {
 		} else if node.Kind == dependencyKindString(dependencyKindReplace) {
 			style = "bold"
 		}
-		_, _ = b.WriteString(fmt.Sprintf(
-			"  \"%s\" [shape=%s style=%s label=\"%s\"];\n",
+		_, _ = fmt.Fprintf(&b, "  \"%s\" [shape=%s style=%s label=\"%s\"];\n",
 			escapeDOT(node.ID),
 			shape,
 			style,
-			escapeDOT(label),
-		))
+			escapeDOT(label))
 	}
 
 	missingNodes := map[string]string{}
@@ -371,11 +369,9 @@ func (g Graph) DOT() string {
 		missingNodes[id] = label
 	}
 	for id, label := range missingNodes {
-		_, _ = b.WriteString(fmt.Sprintf(
-			"  \"%s\" [shape=diamond style=dashed label=\"%s\"];\n",
+		_, _ = fmt.Fprintf(&b, "  \"%s\" [shape=diamond style=dashed label=\"%s\"];\n",
 			escapeDOT(id),
-			escapeDOT(label),
-		))
+			escapeDOT(label))
 	}
 
 	for _, edge := range g.Edges {
@@ -393,13 +389,11 @@ func (g Graph) DOT() string {
 		if edge.Optional {
 			style = "dashed"
 		}
-		_, _ = b.WriteString(fmt.Sprintf(
-			"  \"%s\" -> \"%s\" [label=\"%s\" style=%s];\n",
+		_, _ = fmt.Fprintf(&b, "  \"%s\" -> \"%s\" [label=\"%s\" style=%s];\n",
 			escapeDOT(edge.From),
 			escapeDOT(target),
 			escapeDOT(label),
-			style,
-		))
+			style)
 	}
 
 	_, _ = b.WriteString("}\n")
