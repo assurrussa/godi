@@ -12,9 +12,10 @@ Russian version: `docs/README.md`
 - `docs/en/matchings.md`
 - `docs/en/lifecycle.md`
 - `docs/en/graph.md`
+- `docs/en/project.md`
 
 ## Notes
 
 - `godi` is built on top of `go.uber.org/dig` and follows its conventions for `dig.In`, `dig.Out`, `name`, and `group`.
 - The library targets the Go version declared in `go.mod`.
-
+- Project maintenance facts live in `docs/en/project.md`.

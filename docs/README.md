@@ -12,8 +12,10 @@ English version: `docs/en/README.md`
 - `docs/matchings.md`
 - `docs/lifecycle.md`
 - `docs/graph.md`
+- `docs/project.md`
 
 ## Примечания
 
 - `godi` построена поверх `go.uber.org/dig` и следует его правилам для `dig.In`, `dig.Out`, `name`, `group`.
 - Библиотека ориентируется на версию Go, указанную в `go.mod`.
+- Проектные факты для сопровождения находятся в `docs/project.md`.
