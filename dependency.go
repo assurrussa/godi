@@ -58,7 +58,7 @@ func Decorate(constructor any, opts ...DependencyOption) Dependency {
 }
 
 func (d *Dependency) Type() reflect.Type {
-	if d.err != nil {
+	if d.Error() != nil {
 		return nil
 	}
 
@@ -68,7 +68,7 @@ func (d *Dependency) Type() reflect.Type {
 // ExposedTypes returns the types this dependency is exposed as in the container.
 // When matching interfaces are provided (dig.As), only those interfaces are exposed.
 func (d *Dependency) ExposedTypes() []reflect.Type {
-	if d.err != nil {
+	if d.Error() != nil {
 		return nil
 	}
 
@@ -120,7 +120,18 @@ func (d *Dependency) IsRunnable() bool {
 }
 
 func (d *Dependency) Error() error {
-	return d.err
+	if d == nil {
+		return errors.New("dependency is nil")
+	}
+	if d.err != nil {
+		return d.err
+	}
+	// Constructors created by NewDependency have already been validated. The
+	// only unvalidated public value is a zero Dependency.
+	if d.constructor == nil {
+		return errors.New("dependency has no constructor")
+	}
+	return nil
 }
 
 func (d *Dependency) AddMatchingInterface(as ...any) error {

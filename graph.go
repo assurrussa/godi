@@ -55,7 +55,7 @@ type tokenKey struct {
 // Graph builds a dependency graph for the container root scope (resolved providers only).
 func (c *Container) Graph() Graph {
 	graphs := c.GraphModules()
-	if graph, ok := graphs["root"]; ok {
+	if graph, ok := graphs[rootScopeName]; ok {
 		return graph
 	}
 	return BuildGraph(CollectDependencies(c.dependencies...))
@@ -72,29 +72,29 @@ func (c *Container) GraphModules() map[string]Graph {
 	rootEntries := buildRootEntries(c.dependencies)
 	moduleResolutions, err := buildModuleResolutions(c.modules)
 	if err != nil {
-		return map[string]Graph{"root": BuildGraph(CollectDependencies(c.dependencies...))}
+		return map[string]Graph{rootScopeName: BuildGraph(CollectDependencies(c.dependencies...))}
 	}
 
 	globalEntries := buildGlobalEntries(rootEntries, moduleResolutions)
 	globalResolution, err := resolveEntries(globalEntries)
 	if err != nil {
-		return map[string]Graph{"root": BuildGraph(CollectDependencies(c.dependencies...))}
+		return map[string]Graph{rootScopeName: BuildGraph(CollectDependencies(c.dependencies...))}
 	}
 
 	graphs := map[string]Graph{}
-	graphs["root"] = buildGraphFromEntries(globalResolution.providers, globalResolution.decorators)
+	graphs[rootScopeName] = buildGraphFromEntries(globalResolution.providers, globalResolution.decorators, nil)
 
 	for moduleName, res := range moduleResolutions {
 		entries := moduleGraphEntries(globalResolution.providers, res.providers)
-		resolved, err := resolveEntries(entries)
 		decorators := append([]depEntry{}, globalResolution.decorators...)
 		decorators = append(decorators, res.decorators...)
-		if err != nil {
-			providers, extraDecorators := splitEntries(entries)
-			graphs[moduleName] = buildGraphFromEntries(providers, append(decorators, extraDecorators...))
-			continue
+		privateSlots := make(map[slotKey]depEntry)
+		for slot, entry := range res.slots {
+			if entry.dep.private {
+				privateSlots[slot] = entry
+			}
 		}
-		graphs[moduleName] = buildGraphFromEntries(resolved.providers, decorators)
+		graphs[moduleName] = buildGraphFromEntries(entries, decorators, privateSlots)
 	}
 
 	return graphs
@@ -121,14 +121,18 @@ func BuildGraph(deps Dependencies) Graph {
 	resolved, err := resolveEntries(entries)
 	if err != nil {
 		providers, decorators := splitEntries(entries)
-		return buildGraphFromEntries(providers, decorators)
+		return buildGraphFromEntries(providers, decorators, nil)
 	}
 
-	return buildGraphFromEntries(resolved.providers, resolved.decorators)
+	return buildGraphFromEntries(resolved.providers, resolved.decorators, nil)
 }
 
-func buildGraphFromEntries(providerEntries []depEntry, decoratorEntries []depEntry) Graph {
-	providerNodes, baseByToken := buildProviderNodes(providerEntries)
+func buildGraphFromEntries(
+	providerEntries []depEntry,
+	decoratorEntries []depEntry,
+	privateSlots map[slotKey]depEntry,
+) Graph {
+	providerNodes, baseByToken := buildProviderNodes(providerEntries, privateSlots)
 	decoratorNodes, decoratorBySlot := buildDecoratorNodes(decoratorEntries)
 
 	providerNodes = append(providerNodes, decoratorNodes...)
@@ -139,7 +143,7 @@ func buildGraphFromEntries(providerEntries []depEntry, decoratorEntries []depEnt
 	return Graph{Providers: providerNodes, Edges: edges}
 }
 
-func buildProviderNodes(entries []depEntry) ([]ProviderNode, map[tokenKey][]string) {
+func buildProviderNodes(entries []depEntry, privateSlots map[slotKey]depEntry) ([]ProviderNode, map[tokenKey][]string) {
 	nodes := make([]ProviderNode, 0, len(entries))
 	baseByToken := map[tokenKey][]string{}
 
@@ -151,6 +155,12 @@ func buildProviderNodes(entries []depEntry) ([]ProviderNode, map[tokenKey][]stri
 
 		node, id := buildNodeFromEntry(entry)
 		node.Provides = buildProvideTokens(dep)
+		if len(privateSlots) > 0 {
+			node.Provides = visibleProvideTokens(entry, node.Provides, privateSlots)
+			if len(node.Provides) == 0 {
+				continue
+			}
+		}
 		node.Requires = buildRequireTokens(dep)
 		nodes = append(nodes, node)
 
@@ -164,6 +174,20 @@ func buildProviderNodes(entries []depEntry) ([]ProviderNode, map[tokenKey][]stri
 	}
 
 	return nodes, baseByToken
+}
+
+// Scope shadowing is per slot, not a user Replace operation. Group contributions
+// stay additive, and unshadowed outputs of a multi-output provider remain visible.
+func visibleProvideTokens(entry depEntry, tokens []GraphToken, privateSlots map[slotKey]depEntry) []GraphToken {
+	visible := tokens[:0]
+	for _, token := range tokens {
+		slot := slotKey{t: token.typ, name: token.Name, group: token.Group}
+		if winner, ok := privateSlots[slot]; ok && token.Group == "" && !sameEntry(winner, entry) {
+			continue
+		}
+		visible = append(visible, token)
+	}
+	return visible
 }
 
 func buildDecoratorNodes(entries []depEntry) ([]ProviderNode, map[slotKey][]string) {
@@ -197,6 +221,9 @@ func buildNodeFromEntry(entry depEntry) (ProviderNode, string) {
 	dep := entry.dep
 	info := describeProvider(dep, entry.idx)
 	id := buildProviderID(dep, info, entry.idx)
+	if entry.module != "" {
+		id = fmt.Sprintf("module:%q/%s", entry.module, id)
+	}
 	node := ProviderNode{
 		ID:          id,
 		Key:         derefString(dep.key),
@@ -318,9 +345,6 @@ func moduleGraphEntries(globalProviders, moduleProviders []depEntry) []depEntry 
 	entries = append(entries, globalProviders...)
 	for _, entry := range moduleProviders {
 		if entry.dep.private {
-			dep := entry.dep
-			dep.kind = dependencyKindReplace
-			entry.dep = dep
 			entries = append(entries, entry)
 		}
 	}

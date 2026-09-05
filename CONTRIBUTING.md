@@ -1,71 +1,46 @@
-# Contributing to goinertia
+# Contributing to godi
 
-First off, thank you for considering contributing to `goinertia`! It's people like you that make goinertia such a great tool.
+`godi` is the Go library module `github.com/assurrussa/godi`.
+Keep changes focused on its public DI, module, lifecycle, and diagnostic contracts.
 
-## Getting Started
+## Prerequisites
 
-1.  Fork the repository on GitHub.
-2.  Clone your fork locally.
-3.  Create a new branch for your feature or bug fix.
+- Go at least `1.25.4`, as declared in `go.mod`.
+- `golangci-lint` `v2.13.1`, matching CI. Its bundled formatters are used by Make.
 
-## Development Workflow
+## Development
 
-We use a `Makefile` to simplify common development tasks. Here are the most useful commands:
+Create a branch, add regression coverage for behavior changes, and update both
+Russian (`docs/`) and English (`docs/en/`) documentation when contracts change.
+Tests should exercise the public package API.
 
-### Prerequisites
+- `make check`: verify module tidiness, formatting, vet, lint, and race tests;
+  does not rewrite repository files.
+- `make fix`: run tidy, generation, formatting, and automatic lint fixes.
+- `make test`: run all tests once.
+- `make test-race`: run all tests five times with the race detector.
+- `make fmt` / `make fmt-check`: apply / check formatting.
+- `make lint` / `make lint-fix`: inspect / automatically fix lint findings.
+- `make cover-html`: explicitly generate the ignored `cover.html` report.
+- `make bench-all`: run benchmarks with allocation measurements.
 
-Ensure you have the following installed:
-- [Go](https://go.dev/) (latest version recommended)
-- [golangci-lint](https://golangci-lint.run/)
-- [gofumpt](https://github.com/mvdan/gofumpt)
-- [gci](https://github.com/daixiang0/gci)
+Run examples directly:
 
-### Commands
+```bash
+go run ./examples/basic
+go run ./examples/modules
+go run ./examples/digout
+```
 
-- **Run all checks (generate, format, lint, test)**:
-  ```bash
-  make check
-  ```
-  This is the default goal. Run this before submitting a PR to ensure everything is in order.
-
-- **Run tests**:
-  ```bash
-  make test
-  ```
-
-- **Run tests with race detector**:
-  ```bash
-  make test-race
-  ```
-
-- **Format code**:
-  ```bash
-  make fmt
-  ```
-  This will apply `go fmt`, `gofumpt`, and `gci` to format imports and code style.
-
-- **Lint code**:
-  ```bash
-  make lint
-  ```
-  Uses `golangci-lint` to check for code quality issues.
-
-- **Run the basic example**:
-  ```bash
-  make run-example-base
-  ```
-  Or with a custom port:
-  ```bash
-  make run-example-base PORT=8383
-  ```
+CI tests both the exact Go version in `go.mod` and current stable, with automatic
+toolchain switching disabled. Lint runs once on stable with the pinned version.
+The job has a 15-minute timeout and superseded runs for the same ref are cancelled.
+See [setup-go inputs](https://github.com/actions/setup-go/blob/v6/action.yml) and
+[workflow syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax).
 
 ## Pull Requests
 
-1.  Ensure your code passes all checks (`make` or `make check`).
-2.  Commit your changes with clear, descriptive messages. We prefer [Conventional Commits](https://www.conventionalcommits.org/).
-3.  Push your branch to your fork.
-4.  Submit a pull request to the `master` branch.
+Run `make check` before submitting a pull request to `master`. Describe the
+behavior change and relevant validation. Do not include generated coverage files.
 
-## License
-
-By contributing, you agree that your contributions will be licensed under its MIT License.
+Contributions are licensed under the project's MIT License.
