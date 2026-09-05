@@ -1,22 +1,37 @@
 .DEFAULT_GOAL := check
-GO_MODULE := $(shell go list -m)
-GO_FILES := $(shell find . -type f -name '*.go')
 
-check: tidy generate fmt vet lint test test-race cover-html
+.PHONY: check fix tidy tidy-check generate fmt fmt-check vet lint lint-fix test test-race bench-all cover-html
+
+# Verification never rewrites source, module files, or coverage artifacts.
+check: tidy-check fmt-check vet lint test-race
+
+# Explicitly apply dependency, generation, formatting, and lint fixes in order.
+fix:
+	$(MAKE) tidy
+	$(MAKE) generate
+	$(MAKE) fmt
+	$(MAKE) lint-fix
 
 tidy:
 	go mod tidy
+
+tidy-check:
+	go mod tidy -diff
 
 generate:
 	go generate ./...
 
 fmt:
-	go fmt ./...
-	gofumpt -l -w $(GO_FILES)
-	gci write -s standard -s default -s "prefix($(GO_MODULE))" .
+	golangci-lint fmt
+
+fmt-check:
+	golangci-lint fmt --diff
 
 lint:
-	golangci-lint run -v --fix --timeout=5m ./...
+	golangci-lint run --timeout=5m ./...
+
+lint-fix:
+	golangci-lint run --fix --timeout=5m ./...
 
 vet:
 	go vet ./...
@@ -31,6 +46,6 @@ bench-all:
 	go test -bench=. -benchmem ./...
 
 cover-html:
-	@go test -coverprofile=./coverage.text -covermode=atomic $(shell go list ./...)
-	@go tool cover -html=./coverage.text -o ./cover.html && rm ./coverage.text
-
+	go test -coverprofile=./coverage.text -covermode=atomic ./...
+	go tool cover -html=./coverage.text -o ./cover.html
+	rm ./coverage.text

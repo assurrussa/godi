@@ -54,12 +54,30 @@ func resolveEntries(entries []depEntry) (resolvedScope, error) {
 	result, selected := buildResolvedScope(states)
 	for _, entry := range entries {
 		if selected[entryKeyFor(entry)] {
+			if err := validateWholeProvider(entry, result); err != nil {
+				return resolvedScope{}, err
+			}
 			result.providers = append(result.providers, entry)
 		}
 	}
 	result.decorators = decorators
 
 	return result, nil
+}
+
+// A constructor is registered as a whole in dig, so all of its outputs must win.
+func validateWholeProvider(entry depEntry, resolution resolvedScope) error {
+	slots, err := dependencySlots(entry.dep)
+	if err != nil {
+		return err
+	}
+	for _, slot := range slots {
+		if slot.group == "" && !sameEntry(resolution.slots[slot], entry) {
+			return fmt.Errorf("partial replace of multi-output provider %s (module %q, index %d) is not supported; "+
+				"replace all outputs together or split the constructor", slotLabel(slot), entry.module, entry.idx)
+		}
+	}
+	return nil
 }
 
 func classifyEntry(entry depEntry, states map[slotKey]*slotState, decorators *[]depEntry) error {
@@ -104,6 +122,9 @@ func classifyEntry(entry depEntry, states map[slotKey]*slotState, decorators *[]
 
 func applyToState(state *slotState, slot slotKey, entry depEntry) error {
 	if slot.group != "" {
+		if entry.dep.kind != dependencyKindProvide {
+			return fmt.Errorf("replace/decorate is not supported for group slot %s", slotLabel(slot))
+		}
 		state.group = append(state.group, entry)
 		return nil
 	}
@@ -222,52 +243,56 @@ func provideOutSlotsFromConstructor(constructor any) ([]slotKey, bool, error) {
 }
 
 func parseProvideOutStructSlots(t reflect.Type) ([]slotKey, bool, error) {
-	if t.Kind() == reflect.Pointer {
-		t = t.Elem()
+	if t.Kind() == reflect.Pointer && dig.IsOut(t.Elem()) {
+		return nil, true, errors.New("dig.Out must be returned by value, not pointer")
 	}
-	if t.Kind() != reflect.Struct {
+	if !dig.IsOut(t) {
 		return nil, false, nil
 	}
 
-	digOut := reflect.TypeOf(dig.Out{})
-	hasOut := false
+	var slots []slotKey
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
-		if field.Anonymous && field.Type == digOut {
-			hasOut = true
-			break
-		}
-	}
-	if !hasOut {
-		return nil, false, nil
-	}
-
-	slots := []slotKey{}
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		if field.Anonymous && field.Type == digOut {
+		if field.Type == reflect.TypeFor[dig.Out]() {
 			continue
 		}
 		if field.PkgPath != "" {
-			continue
+			return nil, true, fmt.Errorf("unexported field %s in dig.Out", field.Name)
 		}
-
-		name := field.Tag.Get("name")
-		groupTag := field.Tag.Get("group")
-		group, flatten := parseGroupTag(groupTag)
-		if group != "" {
-			name = ""
+		fieldSlots, err := parseProvideOutField(field)
+		if err != nil {
+			return nil, true, fmt.Errorf("dig.Out field %s: %w", field.Name, err)
 		}
+		slots = append(slots, fieldSlots...)
+	}
+	return slots, true, nil
+}
 
-		fieldType := field.Type
-		if group != "" && fieldType.Kind() == reflect.Slice && flatten {
+func parseProvideOutField(field reflect.StructField) ([]slotKey, error) {
+	name := field.Tag.Get("name")
+	groupTag := field.Tag.Get("group")
+	// dig handles grouped fields as values before checking for result objects.
+	if groupTag == "" {
+		nested, ok, err := parseProvideOutStructSlots(field.Type)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			if name != "" {
+				return nil, errors.New("cannot specify a name for nested dig.Out")
+			}
+			return nested, nil
+		}
+	}
+	group, flatten := parseGroupTag(groupTag)
+	fieldType := field.Type
+	if group != "" {
+		name = ""
+		if fieldType.Kind() == reflect.Slice && flatten {
 			fieldType = fieldType.Elem()
 		}
-
-		slots = append(slots, slotKey{t: fieldType, name: name, group: group})
 	}
-
-	return slots, true, nil
+	return []slotKey{{t: fieldType, name: name, group: group}}, nil
 }
 
 func dedupeSlots(slots []slotKey) []slotKey {
@@ -320,43 +345,15 @@ func decoratorSlots(dep Dependency) ([]slotKey, error) {
 }
 
 func parseOutStructSlots(t reflect.Type) ([]slotKey, bool, error) {
-	if t.Kind() == reflect.Pointer {
-		t = t.Elem()
+	slots, ok, err := parseProvideOutStructSlots(t)
+	if err != nil || !ok {
+		return nil, ok, err
 	}
-	if t.Kind() != reflect.Struct {
-		return nil, false, nil
-	}
-
-	digOut := reflect.TypeOf(dig.Out{})
-	hasOut := false
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		if field.Anonymous && field.Type == digOut {
-			hasOut = true
-			break
-		}
-	}
-	if !hasOut {
-		return nil, false, nil
-	}
-
-	slots := []slotKey{}
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		if field.Anonymous && field.Type == digOut {
-			continue
-		}
-		if field.PkgPath != "" {
-			continue
-		}
-		name := field.Tag.Get("name")
-		group := field.Tag.Get("group")
-		if group != "" {
+	for _, slot := range slots {
+		if slot.group != "" {
 			return nil, true, errors.New("decorate does not support group outputs yet (use Provide for groups)")
 		}
-		slots = append(slots, slotKey{t: field.Type, name: name})
 	}
-
 	return slots, true, nil
 }
 

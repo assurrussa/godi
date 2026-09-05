@@ -22,42 +22,35 @@ type OverrideInfo struct {
 }
 
 // DetectOverrides reports explicit replacements (godi.Replace) by slot.
+// It is independent of list order. Invalid dependency sets return no report;
+// use NewContainer or Provide to obtain their configuration errors.
 func DetectOverrides(deps Dependencies) []OverrideInfo {
-	seen := map[slotKey]ProviderInfo{}
-	overrides := make([]OverrideInfo, 0)
-
-	for i, dep := range deps.List() {
-		if dep.kind == dependencyKindDecorate {
+	entries := buildRootEntries(deps.List())
+	resolved, err := resolveEntries(entries)
+	if err != nil {
+		return nil
+	}
+	var overrides []OverrideInfo
+	for _, entry := range entries {
+		if entry.dep.kind != dependencyKindProvide {
 			continue
 		}
-
-		slots, err := dependencySlots(dep)
-		if err != nil || len(slots) == 0 {
+		slots, err := dependencySlots(entry.dep)
+		if err != nil {
 			continue
 		}
-
-		info := describeProvider(dep, i)
 		for _, slot := range slots {
-			if slot.group != "" {
+			winner, ok := resolved.slots[slot]
+			if !ok || winner.dep.kind != dependencyKindReplace {
 				continue
 			}
-			if dep.kind == dependencyKindReplace {
-				if prev, ok := seen[slot]; ok {
-					overrides = append(overrides, OverrideInfo{
-						Key:      slotLabel(slot),
-						Previous: prev,
-						Next:     info,
-					})
-				}
-				seen[slot] = info
-				continue
-			}
-			if _, ok := seen[slot]; !ok {
-				seen[slot] = info
-			}
+			overrides = append(overrides, OverrideInfo{
+				Key:      slotLabel(slot),
+				Previous: describeProvider(entry.dep, entry.idx),
+				Next:     describeProvider(winner.dep, winner.idx),
+			})
 		}
 	}
-
 	return overrides
 }
 

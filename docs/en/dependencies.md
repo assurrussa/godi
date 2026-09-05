@@ -123,3 +123,34 @@ Notes:
 - `name` / `group` come from the field tags.
 - To provide `[]T` into a group as elements, use the `flatten` modifier (example: `group:"items,flatten"`).
 - `dig.Out` cannot be combined with `WithName`, `WithGroup`, or `WithMatch` on the same dependency.
+
+## Registration Boundaries
+
+Partial replacement of a multi-output provider is rejected during construction,
+including public and private module providers. Replace all of its outputs (one
+or several `Replace` constructors), or split the original constructor. Unchanged
+outputs are never silently discarded. A provider that also contributes to a group
+cannot be replaced this way: groups are additive. `Replace` cannot return group
+fields, including fields inside nested `dig.Out` objects.
+
+Nested result objects are expanded recursively for registration, validation,
+override detection, and graph metadata. Return result objects by value.
+A zero `Dependency` or a typed-nil constructor returns a configuration error;
+metadata methods return no type instead of panicking.
+
+Prefer one `CollectDependencies` batch over repeated `Provide` calls: each call
+rebuilds the accumulated container. Compare local costs with:
+
+```bash
+go test -run '^$' -bench 'BenchmarkContainer' -benchmem -count=3
+```
+
+The fixtures cover 10, 100, and 500 independent named slots; registration,
+validation, and DOT are measured separately. They do not measure service startup
+or constructor execution costs.
+
+## Optional Values
+
+`Optional[T]` resolves an optional `*T`. `Get()` returns a copy of `T`; do not use
+it for values containing a used mutex or when object identity matters. Use
+`ptr, ok := optional.GetPtr()` to obtain the original pointer without copying.

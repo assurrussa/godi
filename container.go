@@ -16,6 +16,8 @@ type containerConfig struct {
 }
 
 // Container wraps dig.Container with a tiny convenience layer.
+// Its methods, including Invoke, Validate, and graph inspection, must be called
+// serially. Resolve services at startup and use those instances directly.
 type Container struct {
 	dig          *dig.Container
 	dependencies []Dependency
@@ -31,10 +33,18 @@ func NewContainer(opts ...ContainerOption) (*Container, error) {
 	}
 
 	modules := make([]Module, 0, len(cfg.modules))
+	moduleNames := make(map[string]bool, len(cfg.modules))
 	for _, module := range cfg.modules {
 		if module.Name == "" {
 			return nil, errors.New("module name is required")
 		}
+		if module.Name == rootScopeName {
+			return nil, errors.New("module name root is reserved")
+		}
+		if moduleNames[module.Name] {
+			return nil, fmt.Errorf("duplicate module name %q", module.Name)
+		}
+		moduleNames[module.Name] = true
 		deps, err := applyMatchingsToList(module.Dependencies.List(), cfg.matchings)
 		if err != nil {
 			return nil, fmt.Errorf("module %s: %w", module.Name, err)

@@ -55,7 +55,7 @@ type tokenKey struct {
 // Graph builds a dependency graph for the container root scope (resolved providers only).
 func (c *Container) Graph() Graph {
 	graphs := c.GraphModules()
-	if graph, ok := graphs["root"]; ok {
+	if graph, ok := graphs[rootScopeName]; ok {
 		return graph
 	}
 	return BuildGraph(CollectDependencies(c.dependencies...))
@@ -72,17 +72,17 @@ func (c *Container) GraphModules() map[string]Graph {
 	rootEntries := buildRootEntries(c.dependencies)
 	moduleResolutions, err := buildModuleResolutions(c.modules)
 	if err != nil {
-		return map[string]Graph{"root": BuildGraph(CollectDependencies(c.dependencies...))}
+		return map[string]Graph{rootScopeName: BuildGraph(CollectDependencies(c.dependencies...))}
 	}
 
 	globalEntries := buildGlobalEntries(rootEntries, moduleResolutions)
 	globalResolution, err := resolveEntries(globalEntries)
 	if err != nil {
-		return map[string]Graph{"root": BuildGraph(CollectDependencies(c.dependencies...))}
+		return map[string]Graph{rootScopeName: BuildGraph(CollectDependencies(c.dependencies...))}
 	}
 
 	graphs := map[string]Graph{}
-	graphs["root"] = buildGraphFromEntries(globalResolution.providers, globalResolution.decorators)
+	graphs[rootScopeName] = buildGraphFromEntries(globalResolution.providers, globalResolution.decorators)
 
 	for moduleName, res := range moduleResolutions {
 		entries := moduleGraphEntries(globalResolution.providers, res.providers)
@@ -197,6 +197,9 @@ func buildNodeFromEntry(entry depEntry) (ProviderNode, string) {
 	dep := entry.dep
 	info := describeProvider(dep, entry.idx)
 	id := buildProviderID(dep, info, entry.idx)
+	if entry.module != "" {
+		id = fmt.Sprintf("module:%q/%s", entry.module, id)
+	}
 	node := ProviderNode{
 		ID:          id,
 		Key:         derefString(dep.key),

@@ -29,9 +29,8 @@ Read local truth before shared context:
 5. package code and tests in the repository root
 6. examples under `examples/`
 
-Known local doc drift: `CONTRIBUTING.md` currently contains copied `goinertia`
-wording and Make targets that do not exist in this repository. Do not treat it
-as authoritative until it is refreshed.
+`CONTRIBUTING.md` summarizes the verified development commands and CI tool
+versions. Keep it aligned with `Makefile` and `.github/workflows/go.yml`.
 
 ## Shared Agent Context
 

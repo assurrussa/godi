@@ -43,3 +43,6 @@ This means:
 - if multiple modules export the same slot, container creation fails (duplicate provider) unless you explicitly model override via `Replace`
 - private providers never leak to root
 
+
+Module names must be non-empty and unique within a container. The name `root`
+is reserved for the root diagnostic graph. Invalid names fail at construction.

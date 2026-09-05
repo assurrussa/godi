@@ -1,6 +1,6 @@
 # Project Passport
 
-Current as of: 2026-06-04.
+Current as of: 2026-09-05.
 
 `godi` is a Go library module: `github.com/assurrussa/godi`. It provides a thin
 layer over `go.uber.org/dig` for DI dependency registration, module scopes,
@@ -44,9 +44,11 @@ Full local gate from `Makefile`:
 make check
 ```
 
-`make check` runs `tidy`, `generate`, `fmt`, `vet`, `lint`, `test`,
-`test-race`, and `cover-html`. The `fmt`, `lint`, and `cover-html` targets may
-rewrite files; `cover.html` is ignored by git.
+`make check` verifies module tidiness and formatting, runs vet, lint, and race
+tests without rewriting repository files. `make fix` explicitly applies tidy,
+generation, formatting, and lint fixes; `make cover-html` generates coverage.
+CI tests the Go version from `go.mod` and stable in one bounded job, and pins
+`golangci-lint` to `v2.13.1`. See `CONTRIBUTING.md` for development commands.
 
 If the environment cannot access the system Go build cache, use a local cache:
 
@@ -55,10 +57,12 @@ mkdir -p tmp/gocache
 GOCACHE=$PWD/tmp/gocache go test ./...
 ```
 
-## Current Doc Debt
+## Concurrency Contract
 
-`CONTRIBUTING.md` currently appears copied from `goinertia`: it contains the
-wrong project name and commands that are absent from this repository's
-`Makefile`. Until it is refreshed, the sources of truth for development are
-`AGENTS.md`, `README.md`, `docs/`, `go.mod`, `Makefile`, `.golangci.yml`, the
-CI workflow, code, and tests.
+Container construction, mutation, resolution, validation, and graph inspection
+must be serialized by the caller. `Container` is not safe for concurrent use.
+Resolve service instances during startup and then use those instances directly;
+their own concurrency contracts apply. `Provide` is forbidden after the first
+`Invoke` or `Runnables` call, even when resolution fails. `Validate` is a dry run
+and does not cross that boundary. Lifecycle state synchronization is documented
+separately in `lifecycle.md`.

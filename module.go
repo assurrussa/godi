@@ -1,5 +1,7 @@
 package godi
 
+const rootScopeName = "root"
+
 // Module groups dependencies and allows marking some as private to the module scope.
 type Module struct {
 	Name         string

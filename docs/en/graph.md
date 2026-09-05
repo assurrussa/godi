@@ -39,3 +39,12 @@ dot -Tsvg graph.dot > graph.svg
 overrides := godi.DetectOverrides(deps)
 ```
 
+
+## Identity And Overrides
+
+Provider IDs include module scope as well as the local index, so reusing `WithKey`
+in different modules does not merge graph nodes. Root IDs retain their existing
+format. Treat IDs as diagnostic identifiers rather than persistent storage keys.
+`DetectOverrides` uses the same slot resolution as the container and reports
+`Replace` regardless of list order. Invalid dependency sets return no override
+report; use `NewContainer` or `Provide` to obtain the configuration error.

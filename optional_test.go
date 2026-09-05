@@ -50,3 +50,28 @@ func TestOptionalPresent(t *testing.T) {
 		t.Fatalf("expected optional value x, got %q (ok=%v)", got, ok)
 	}
 }
+
+func TestOptionalGetPtrPreservesIdentity(t *testing.T) {
+	t.Parallel()
+	value := "original"
+	cnt, err := godi.NewContainer(godi.WithDependencies(godi.NewSingleDependency(func() *string { return &value })))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cnt.Invoke(func(o godi.Optional[string]) {
+		ptr, ok := o.GetPtr()
+		if !ok || ptr != &value {
+			t.Fatal("pointer identity lost")
+		}
+		*ptr = "updated"
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if value != "updated" {
+		t.Fatal("original object unchanged")
+	}
+	var missing godi.Optional[string]
+	if ptr, ok := missing.GetPtr(); ok || ptr != nil {
+		t.Fatal("missing pointer reported as present")
+	}
+}

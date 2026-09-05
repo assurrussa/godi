@@ -14,6 +14,9 @@ func validateConstructor(constructor any) error {
 	if funcType.Kind() != reflect.Func {
 		return fmt.Errorf("constructor must be a function, got %T", constructor)
 	}
+	if reflect.ValueOf(constructor).IsNil() {
+		return fmt.Errorf("constructor must not be a nil function: %T", constructor)
+	}
 
 	outTypes := make([]reflect.Type, 0, funcType.NumOut())
 	for i := range funcType.NumOut() {
