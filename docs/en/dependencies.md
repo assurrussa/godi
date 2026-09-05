@@ -138,6 +138,11 @@ override detection, and graph metadata. Return result objects by value.
 A zero `Dependency` or a typed-nil constructor returns a configuration error;
 metadata methods return no type instead of panicking.
 
+For public module providers, replacement completeness is checked after combining
+root and all module exports. Different outputs may be replaced in different
+scopes. Private providers must be replaced completely within their own module;
+root or another module cannot supply the missing private replacement.
+
 Prefer one `CollectDependencies` batch over repeated `Provide` calls: each call
 rebuilds the accumulated container. Compare local costs with:
 

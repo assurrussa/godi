@@ -209,9 +209,18 @@ func buildModuleResolutions(modules []Module) (map[string]resolvedScope, error) 
 		for i, dep := range module.Dependencies.List() {
 			entries = append(entries, depEntry{dep: dep, idx: i, module: module.Name})
 		}
-		res, err := resolveEntries(entries)
+		res, err := resolveSlotEntries(entries)
 		if err != nil {
 			return nil, fmt.Errorf("module %s: %w", module.Name, err)
+		}
+		// Private constructors must be replaceable within their own scope.
+		// Public constructors are checked after all exports meet in global resolution.
+		for _, provider := range res.providers {
+			if provider.dep.private {
+				if err := validateWholeProvider(provider, res); err != nil {
+					return nil, fmt.Errorf("module %s: %w", module.Name, err)
+				}
+			}
 		}
 		moduleResolutions[module.Name] = res
 	}

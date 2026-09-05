@@ -21,7 +21,14 @@ dots := cnt.GraphDOTModules()     // DOT for each graph
 Module graphs include:
 
 - resolved root providers
-- module-private providers (displayed as `replace` in module graph)
+- module-private providers
+
+Private visibility is modeled per output slot, independently of `Replace`.
+A private ordinary slot hides the corresponding global slot; group contributions
+from both scopes remain additive, including mixed `dig.Out` results. Unshadowed
+outputs of a global multi-output provider remain visible. Fully hidden provider
+nodes are omitted. Nodes keep their declared kind: `Private()` alone does not
+turn a provider into a `replace` node.
 
 ## Rendering DOT
 

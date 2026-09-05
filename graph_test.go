@@ -139,7 +139,7 @@ func TestGraphModulesShowsPrivateProvidersInModuleGraphOnly(t *testing.T) {
 	if modStrings != 1 {
 		t.Fatalf("expected module graph to have 1 resolved string provider, got %d", modStrings)
 	}
-	if modReplaces != 1 {
-		t.Fatalf("expected module graph to mark private provider as replace, got %d", modReplaces)
+	if modReplaces != 0 {
+		t.Fatalf("private visibility must not synthesize replace, got %d", modReplaces)
 	}
 }

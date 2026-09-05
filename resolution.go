@@ -41,6 +41,21 @@ type slotState struct {
 }
 
 func resolveEntries(entries []depEntry) (resolvedScope, error) {
+	result, err := resolveSlotEntries(entries)
+	if err != nil {
+		return resolvedScope{}, err
+	}
+	for _, entry := range result.providers {
+		if err := validateWholeProvider(entry, result); err != nil {
+			return resolvedScope{}, err
+		}
+	}
+	return result, nil
+}
+
+// resolveSlotEntries selects slots without requiring each public constructor to
+// win as a whole. Module exports need the global candidates before that check.
+func resolveSlotEntries(entries []depEntry) (resolvedScope, error) {
 	states := map[slotKey]*slotState{}
 	decorators := make([]depEntry, 0)
 
@@ -54,9 +69,6 @@ func resolveEntries(entries []depEntry) (resolvedScope, error) {
 	result, selected := buildResolvedScope(states)
 	for _, entry := range entries {
 		if selected[entryKeyFor(entry)] {
-			if err := validateWholeProvider(entry, result); err != nil {
-				return resolvedScope{}, err
-			}
 			result.providers = append(result.providers, entry)
 		}
 	}

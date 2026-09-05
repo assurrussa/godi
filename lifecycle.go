@@ -3,6 +3,8 @@ package godi
 import (
 	"context"
 	"errors"
+	"fmt"
+	"runtime/debug"
 	"sync"
 	"time"
 )
@@ -10,6 +12,30 @@ import (
 type Hook struct {
 	OnStart func(context.Context) error
 	OnStop  func(context.Context) error
+}
+
+// HookPanicError reports a recovered panic in an OnStart or OnStop callback.
+// Index is the zero-based registration index. Stack is captured at the panic.
+type HookPanicError struct {
+	Phase string
+	Index int
+	Value any
+	Stack []byte
+}
+
+func (e *HookPanicError) Error() string {
+	return fmt.Sprintf("lifecycle %s hook %d panicked: %v\n%s", e.Phase, e.Index, e.Value, e.Stack)
+}
+
+// Unwrap preserves errors.Is/errors.As when the panic value is an error.
+func (e *HookPanicError) Unwrap() error {
+	err, _ := e.Value.(error)
+	return err
+}
+
+type indexedHook struct {
+	Hook
+	index int
 }
 
 type lifecycleState uint8
@@ -28,7 +54,7 @@ const (
 type Lifecycle struct {
 	mu       sync.Mutex
 	hooks    []Hook
-	active   []Hook
+	active   []indexedHook
 	state    lifecycleState
 	startErr error
 	stopErr  error
@@ -73,7 +99,7 @@ func (l *Lifecycle) Start(ctx context.Context) error {
 		}
 		err := ctx.Err()
 		if err == nil {
-			err = hook.OnStart(ctx)
+			err = runHook(ctx, hook.OnStart, "OnStart", i)
 		}
 		if err != nil {
 			return l.rollback(ctx, activeHooks(hooks, active), err)
@@ -103,7 +129,7 @@ func (l *Lifecycle) startStateError() error {
 	}
 }
 
-func (l *Lifecycle) rollback(ctx context.Context, hooks []Hook, startErr error) error {
+func (l *Lifecycle) rollback(ctx context.Context, hooks []indexedHook, startErr error) error {
 	// Preserve context values, but allow cleanup after startup cancellation.
 	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 	defer cancel()
@@ -129,9 +155,9 @@ func (l *Lifecycle) Stop(ctx context.Context) error {
 		l.mu.Unlock()
 		return errors.New("lifecycle transition already in progress")
 	case lifecycleIdle:
-		for _, hook := range l.hooks {
+		for i, hook := range l.hooks {
 			if hook.OnStart == nil {
-				l.active = append(l.active, hook)
+				l.active = append(l.active, indexedHook{Hook: hook, index: i})
 			}
 		}
 	case lifecycleRunning:
@@ -150,26 +176,36 @@ func (l *Lifecycle) Stop(ctx context.Context) error {
 	return err
 }
 
-func activeHooks(hooks []Hook, active []bool) []Hook {
-	result := make([]Hook, 0, len(hooks))
+func activeHooks(hooks []Hook, active []bool) []indexedHook {
+	result := make([]indexedHook, 0, len(hooks))
 	for i, hook := range hooks {
 		if active[i] {
-			result = append(result, hook)
+			result = append(result, indexedHook{Hook: hook, index: i})
 		}
 	}
 	return result
 }
 
-func (l *Lifecycle) stopStarted(ctx context.Context, hooks []Hook) error {
+func (l *Lifecycle) stopStarted(ctx context.Context, hooks []indexedHook) error {
 	var stopErr error
 	for i := len(hooks) - 1; i >= 0; i-- {
 		hook := hooks[i]
 		if hook.OnStop == nil {
 			continue
 		}
-		if err := hook.OnStop(ctx); err != nil {
+		if err := runHook(ctx, hook.OnStop, "OnStop", hook.index); err != nil {
 			stopErr = errors.Join(stopErr, err)
 		}
 	}
 	return stopErr
+}
+
+// Catch each callback separately so a cleanup panic cannot skip other hooks.
+func runHook(ctx context.Context, callback func(context.Context) error, phase string, index int) (err error) {
+	defer func() {
+		if value := recover(); value != nil {
+			err = &HookPanicError{Phase: phase, Index: index, Value: value, Stack: debug.Stack()}
+		}
+	}()
+	return callback(ctx)
 }

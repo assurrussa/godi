@@ -20,6 +20,14 @@
 - State is synchronized, but overlapping or reentrant `Start`/`Stop` calls during
   a transition return an error. Callbacks run without holding the state mutex.
 
+Panic in a callback is recovered as `*HookPanicError`, containing the phase
+(`OnStart` or `OnStop`), the original registration index, panic value, and stack.
+Use `errors.As` to inspect it; `errors.Is`/`errors.As` also reach an error used as
+the panic value. An `OnStart` panic follows the normal rollback path. An `OnStop`
+panic is joined with other cleanup errors, and cleanup continues for the remaining
+active hooks. These failures finish the transition and preserve the same
+at-most-once cleanup and repeated-call behavior as returned errors.
+
 ```go
 l := godi.NewLifecycle()
 l.Append(godi.Hook{
