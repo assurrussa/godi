@@ -1,6 +1,6 @@
 # Проектный паспорт
 
-Актуально на: 2026-09-05.
+Актуально на: 2026-10-31.
 
 `godi` — библиотечный Go-модуль `github.com/assurrussa/godi`. Проект даёт
 тонкий слой над `go.uber.org/dig` для регистрации DI-зависимостей, модульных
@@ -17,9 +17,12 @@ scope, явных override/decorate-сценариев, lifecycle hooks, optiona
 - Пользовательская документация ведётся на русском в `docs/` и на английском в
   `docs/en/`.
 
+Требуется Go `1.27.0` или новее; базовая DI-библиотека — `go.uber.org/dig`
+`v1.19.0`.
+
 ## Основные файлы
 
-- `container.go`: контейнер, `Provide`, `Invoke`, `Validate`, module build path.
+- `container.go`: контейнер, `Provide`, `Invoke`, `Resolve`, `Validate`, module build path.
 - `dependency.go`, `dependency_options.go`: dependency model and options.
 - `module.go`: module scope contract.
 - `lifecycle.go`: ordered start/stop hooks.
@@ -49,15 +52,11 @@ make check
 без изменения файлов репозитория. `make fix` явно применяет tidy, генерацию,
 форматирование и исправления линтера; `make cover-html` создаёт coverage-отчёт.
 CI проверяет Go из `go.mod` и stable в одном job с ограничением времени; версия
-`golangci-lint` закреплена на `v2.13.1`. Команды разработки описаны в `CONTRIBUTING.md`.
+`golangci-lint` закреплена на `v2.15.0`. Команды разработки описаны в `CONTRIBUTING.md`.
 
-Если окружение не даёт доступ к системному Go build cache, используйте локальный
-cache:
-
-```bash
-mkdir -p tmp/gocache
-GOCACHE=$PWD/tmp/gocache go test ./...
-```
+Для локальных проверок используйте настроенные общие кеши сборки и модулей Go.
+Если sandbox ограничивает доступ к кешам, получите доступ к ним вместо создания
+отдельного кеша в checkout.
 
 ## Контракт конкурентного использования
 
@@ -65,6 +64,6 @@ GOCACHE=$PWD/tmp/gocache go test ./...
 вызывающая сторона должна выполнять последовательно. `Container` не безопасен
 для конкурентного использования. Получайте экземпляры сервисов при запуске,
 затем используйте их напрямую с учётом их собственных правил конкурентности.
-`Provide` запрещён после первого `Invoke` или `Runnables`, даже при ошибке
+`Provide` запрещён после первого `Invoke`, `Resolve` или `Runnables`, даже при ошибке
 разрешения. `Validate` работает в dry-run режиме и не пересекает эту границу.
 Синхронизация состояния Lifecycle описана отдельно в `lifecycle.md`.

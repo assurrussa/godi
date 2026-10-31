@@ -4,8 +4,25 @@
 
 В `godi` есть два способа настроить это:
 
-- на уровне конкретной зависимости через `WithMatch`
+- на уровне конкретной зависимости через `As[T]` или `WithMatch`
 - глобально для контейнера через `WithMatchings`
+
+## As[T]
+
+Для явной привязки вызовите `As[T]()` на значении зависимости:
+
+```go
+base := godi.NewDependency(func() *bytes.Buffer { return bytes.NewBufferString("ok") })
+reader := base.As[io.Reader]()
+readerWriter := reader.As[io.Writer]()
+```
+
+`T` должен быть интерфейсом. `As[T]` применяет `WithMatch(new(T))` и следует
+тем же правилам валидации. `readerWriter` экспортирует `io.Reader` и `io.Writer`,
+но не `*bytes.Buffer`. `base` сохраняет конкретный тип, а `reader` экспортирует
+только `io.Reader`: новая цепочка не изменяет предыдущие значения и соседние
+цепочки. Регистрируйте нужный вариант зависимости. Интерфейсы автоматически
+не привязываются, если вы явно не включили `WithMatchings`.
 
 ## WithMatch
 

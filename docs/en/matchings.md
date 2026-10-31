@@ -4,8 +4,25 @@
 
 `godi` offers two ways to configure it:
 
-- per-dependency via `WithMatch`
+- per-dependency via `As[T]` or `WithMatch`
 - globally via `WithMatchings`
+
+## As[T]
+
+For an explicit binding, chain `As[T]()` on a dependency value:
+
+```go
+base := godi.NewDependency(func() *bytes.Buffer { return bytes.NewBufferString("ok") })
+reader := base.As[io.Reader]()
+readerWriter := reader.As[io.Writer]()
+```
+
+`T` must be an interface. `As[T]` applies `WithMatch(new(T))` and follows the
+same validation rules. `readerWriter` exports `io.Reader` and `io.Writer`, but
+not `*bytes.Buffer`. `base` stays concrete and `reader` still exports only
+`io.Reader`; branching a chain does not change earlier values or sibling chains.
+Register the variant you intend to use. Interfaces are not bound automatically
+unless you opt into `WithMatchings`.
 
 ## WithMatch
 

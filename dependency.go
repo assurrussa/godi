@@ -3,6 +3,7 @@ package godi
 import (
 	"errors"
 	"reflect"
+	"slices"
 )
 
 type Dependency struct {
@@ -41,6 +42,15 @@ func NewDependency(constructor any, opts ...DependencyOption) Dependency {
 
 func NewSingleDependency(constructor any, opts ...DependencyOption) Dependencies {
 	return CollectDependencies(NewDependency(constructor, opts...))
+}
+
+// As returns a copy of the dependency exposed as interface T (dig.As).
+// Calls may be chained to expose multiple interfaces. The original concrete
+// type is not exposed. Invalid targets are reported through Error or NewContainer.
+func (d Dependency) As[T any]() Dependency {
+	d.matchingInterfaces = slices.Clone(d.matchingInterfaces)
+	WithMatch(new(T))(&d)
+	return d
 }
 
 // Replace declares an explicit replacement for a dependency slot.
