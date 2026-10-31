@@ -1,26 +1,26 @@
 package main
 
 import (
+	"bytes"
+	"io"
 	"os"
-
-	"go.uber.org/dig"
 
 	"github.com/assurrussa/godi"
 )
 
 func main() {
 	cnt, err := godi.NewContainer(
-		godi.WithDependencies(
-			godi.CollectDependencies(
-				godi.NewDependency(func() string { return "world" }, godi.WithName("target")),
-				godi.NewDependency(func(in struct {
-					dig.In
-					Target string `name:"target"`
-				},
-				) string {
-					return "hello " + in.Target
-				}),
-			),
+		godi.WithConstructors(
+			godi.NewDependency(func() *bytes.Buffer {
+				return bytes.NewBufferString("world")
+			}).As[io.Reader](),
+			func(reader io.Reader) (string, error) {
+				target, readErr := io.ReadAll(reader)
+				if readErr != nil {
+					return "", readErr
+				}
+				return "hello " + string(target), nil
+			},
 		),
 	)
 	if err != nil {
@@ -31,8 +31,8 @@ func main() {
 		panic(err)
 	}
 
-	var greeting string
-	if err := cnt.Invoke(func(s string) { greeting = s }); err != nil {
+	greeting, err := cnt.Resolve[string]()
+	if err != nil {
 		panic(err)
 	}
 

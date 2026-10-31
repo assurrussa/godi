@@ -1,5 +1,27 @@
 # Зависимости (Dependencies)
 
+## WithConstructors
+
+`WithConstructors(items ...any)` — опция контейнера для смешанной регистрации
+функций-конструкторов и готовых значений `Dependency`:
+
+```go
+cnt, err := godi.NewContainer(
+  godi.WithConstructors(
+    func() string { return "base" },
+    godi.Replace(func() string { return "override" }),
+    godi.Decorate(func(s string) string { return s + "!" }),
+  ),
+)
+```
+
+Функции оборачиваются в `NewDependency`; готовые значения сохраняют операцию
+и опции. Указатели `*Dependency` не принимаются. Повторные опции и
+`WithDependencies` добавляют регистрации в общий набор. Некорректный вход
+приводит к ошибке `NewContainer` при существующей валидации. Регистрация и
+`Validate` не запускают конструкторы. `WithDependencies` и `CollectDependencies`
+остаются доступны для явно типизированных наборов.
+
 ## Provide
 
 По умолчанию зависимость "предоставляет" (provide) слот.
@@ -93,6 +115,23 @@ godi.NewDependency(func() string { return "b" }, godi.WithGroup("items"))
 ```go
 godi.NewDependency(func() *bytes.Buffer { return bytes.NewBufferString("ok") }, godi.WithMatch(new(io.Reader)))
 ```
+
+### As[T]
+
+`As[T]()` — fluent-эквивалент `WithMatch(new(T))`; `T` должен быть интерфейсом.
+Например:
+
+```go
+dep := godi.NewDependency(func() *bytes.Buffer {
+  return bytes.NewBufferString("ok")
+}).As[io.Reader]().As[io.Writer]()
+```
+
+Так экспортируются оба интерфейса, без дополнительной регистрации `*bytes.Buffer`.
+`As` возвращает новое значение зависимости: исходная зависимость и независимые
+цепочки вызовов сохраняют свои привязки. Другие интерфейсы автоматически не
+привязываются. Для `As` действуют все проверки и ограничения `WithMatch`, включая
+ограничения для `Decorate` и `dig.Out`.
 
 ### WithKey
 

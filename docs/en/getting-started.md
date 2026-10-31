@@ -1,5 +1,7 @@
 # Getting Started
 
+Requires Go `1.27.0` or newer.
+
 ## Concepts
 
 - `Dependency`: a constructor function plus optional options (name/group/as/key).
@@ -14,13 +16,16 @@
 
 ```go
 cnt, err := godi.NewContainer(
-  godi.WithDependencies(
-    godi.CollectDependencies(
-      godi.NewDependency(func() string { return "value" }),
-    ),
-  ),
+  godi.WithConstructors(func() string { return "value" }),
 )
 ```
+
+`WithConstructors(items ...any)` accepts constructor functions and ready
+`Dependency` values, including `Replace`, `Decorate`, and their options. Pass
+values, not `*Dependency` pointers. Each function is wrapped with `NewDependency`.
+Repeated `WithConstructors` and `WithDependencies` options append registrations.
+Invalid items fail `NewContainer` through the usual dependency validation.
+Neither creating the option, building the container, nor `Validate` runs constructors.
 
 ### Constructor Signature Rules
 
@@ -31,6 +36,23 @@ Constructors must be functions that return:
 
 Returning only `error` is rejected.
 
+## Resolving A Value
+
+```go
+got, err := cnt.Resolve[string]()
+if err != nil {
+  return err
+}
+```
+
+`Resolve[T]()` is a thin wrapper around `Invoke`: it returns the resolved value
+or the zero value of `T` and the original error. Constructors remain lazy and
+cached; resolving the same pointer dependency preserves its identity. It does
+not infer interface bindings: register them explicitly with `As[T]` or matchings.
+
+Use `Invoke` with `dig.In` for named/group inputs and more complex injection.
+`Resolve` can also resolve a `dig.In` struct; it adds no separate name/group options.
+
 ## Invoking
 
 ```go
@@ -40,7 +62,9 @@ err := cnt.Invoke(func(v string) {
 })
 ```
 
-The first `Invoke` starts the container. After that, `Provide` is rejected.
+The first `Invoke`, `Resolve`, or `Runnables` call starts the container, even if
+resolution fails. After that, `Provide` is rejected. Serialize all container calls;
+`Container` is not safe for concurrent use.
 
 ## Adding Dependencies Incrementally
 

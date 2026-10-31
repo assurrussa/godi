@@ -1,5 +1,27 @@
 # Dependencies
 
+## WithConstructors
+
+`WithConstructors(items ...any)` is a container option for mixing raw constructor
+functions with ready `Dependency` values:
+
+```go
+cnt, err := godi.NewContainer(
+  godi.WithConstructors(
+    func() string { return "base" },
+    godi.Replace(func() string { return "override" }),
+    godi.Decorate(func(s string) string { return s + "!" }),
+  ),
+)
+```
+
+Functions are wrapped with `NewDependency`; ready values retain their operation
+and options. `*Dependency` is not accepted. Repeated options and
+`WithDependencies` append to the same registrations. Invalid inputs fail
+`NewContainer` through existing validation. Registration and `Validate` never
+run constructors. `WithDependencies` and `CollectDependencies` remain available
+for explicitly typed batches.
+
 ## Provide
 
 By default, a dependency provides a slot.
@@ -93,6 +115,23 @@ Exposes the dependency under an interface using `dig.As`.
 ```go
 godi.NewDependency(func() *bytes.Buffer { return bytes.NewBufferString("ok") }, godi.WithMatch(new(io.Reader)))
 ```
+
+### As[T]
+
+`As[T]()` is the fluent equivalent of `WithMatch(new(T))`; `T` must be an
+interface. For example:
+
+```go
+dep := godi.NewDependency(func() *bytes.Buffer {
+  return bytes.NewBufferString("ok")
+}).As[io.Reader]().As[io.Writer]()
+```
+
+This exports both interfaces, without also registering `*bytes.Buffer`.
+`As` returns a new dependency value: the original dependency and sibling chains
+keep their existing bindings. It does not infer bindings for other interfaces.
+All `WithMatch` validation and restrictions also apply to `As`, including the
+restrictions for `Decorate` and `dig.Out`.
 
 ### WithKey
 

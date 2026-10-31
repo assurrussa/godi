@@ -2,6 +2,21 @@ package godi
 
 type ContainerOption func(c *containerConfig)
 
+// WithConstructors adds constructor functions and configured Dependency values.
+// Functions are wrapped with NewDependency. Invalid inputs are reported by
+// NewContainer; constructors are not executed during registration.
+func WithConstructors(constructors ...any) ContainerOption {
+	deps := make([]Dependency, 0, len(constructors))
+	for _, constructor := range constructors {
+		if dep, ok := constructor.(Dependency); ok {
+			deps = append(deps, dep)
+			continue
+		}
+		deps = append(deps, NewDependency(constructor))
+	}
+	return WithDependencies(CollectDependencies(deps...))
+}
+
 // WithDependencies adds dependencies to the container.
 func WithDependencies(d ...Dependencies) ContainerOption {
 	return func(c *containerConfig) {

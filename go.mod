@@ -1,6 +1,6 @@
 module github.com/assurrussa/godi
 
-go 1.25.4
+go 1.27.0
 
 require go.uber.org/dig v1.19.0
 

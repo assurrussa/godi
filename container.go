@@ -79,6 +79,14 @@ func (c *Container) Invoke(consumer any) error {
 	return c.dig.Invoke(consumer)
 }
 
+// Resolve returns the dependency of type T, or its zero value and the Invoke
+// error. Like Invoke, even a failed Resolve prevents subsequent Provide calls.
+func (c *Container) Resolve[T any]() (T, error) {
+	var result T
+	err := c.Invoke(func(value T) { result = value })
+	return result, err
+}
+
 // Provide appends dependencies to the container.
 func (c *Container) Provide(deps Dependencies) error {
 	if c.started {

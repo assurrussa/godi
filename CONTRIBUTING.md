@@ -5,8 +5,8 @@ Keep changes focused on its public DI, module, lifecycle, and diagnostic contrac
 
 ## Prerequisites
 
-- Go at least `1.25.4`, as declared in `go.mod`.
-- `golangci-lint` `v2.13.1`, matching CI. Its bundled formatters are used by Make.
+- Go at least `1.27.0`, as declared in `go.mod`.
+- `golangci-lint` `v2.13.2`, matching CI. Its bundled formatters are used by Make.
 
 ## Development
 
@@ -23,6 +23,9 @@ Tests should exercise the public package API.
 - `make lint` / `make lint-fix`: inspect / automatically fix lint findings.
 - `make cover-html`: explicitly generate the ignored `cover.html` report.
 - `make bench-all`: run benchmarks with allocation measurements.
+
+Use the configured shared Go build and module caches for local checks. Do not
+create per-checkout caches.
 
 Run examples directly:
 
