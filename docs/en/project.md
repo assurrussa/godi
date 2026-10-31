@@ -51,7 +51,7 @@ make check
 tests without rewriting repository files. `make fix` explicitly applies tidy,
 generation, formatting, and lint fixes; `make cover-html` generates coverage.
 CI tests the Go version from `go.mod` and stable in one bounded job, and pins
-`golangci-lint` to `v2.13.2`. See `CONTRIBUTING.md` for development commands.
+`golangci-lint` to `v2.15.0`. See `CONTRIBUTING.md` for development commands.
 
 Use the configured shared Go build and module caches for local checks. If the
 sandbox restricts cache access, obtain access to those caches rather than

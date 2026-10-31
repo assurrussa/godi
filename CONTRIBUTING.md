@@ -6,7 +6,7 @@ Keep changes focused on its public DI, module, lifecycle, and diagnostic contrac
 ## Prerequisites
 
 - Go at least `1.27.0`, as declared in `go.mod`.
-- `golangci-lint` `v2.13.2`, matching CI. Its bundled formatters are used by Make.
+- `golangci-lint` `v2.15.0`, matching CI. Its bundled formatters are used by Make.
 
 ## Development
 
