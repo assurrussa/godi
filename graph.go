@@ -627,8 +627,8 @@ func parseConstructorInputs(constructor any) []GraphToken {
 	var result []GraphToken
 	for i := 0; i < fnType.NumIn(); i++ {
 		param := fnType.In(i)
-		if isDigInStruct(param) {
-			result = append(result, parseDigInFields(param)...)
+		if structType, ok := digInStructType(param); ok {
+			result = append(result, parseDigInFields(structType, map[reflect.Type]bool{})...)
 			continue
 		}
 		result = append(result, GraphToken{typ: param, Type: param.String()})
@@ -636,23 +636,26 @@ func parseConstructorInputs(constructor any) []GraphToken {
 	return result
 }
 
-func isDigInStruct(t reflect.Type) bool {
+func digInStructType(t reflect.Type) (reflect.Type, bool) {
 	if t == nil {
-		return false
+		return nil, false
 	}
 	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
-	if t.Kind() != reflect.Struct {
-		return false
+	if t.Kind() != reflect.Struct || !dig.IsIn(t) {
+		return nil, false
 	}
-	return dig.IsIn(t)
+	return t, true
 }
 
-func parseDigInFields(t reflect.Type) []GraphToken {
-	if t.Kind() == reflect.Pointer {
-		t = t.Elem()
+func parseDigInFields(t reflect.Type, visited map[reflect.Type]bool) []GraphToken {
+	if visited[t] {
+		return nil
 	}
+	visited[t] = true
+	defer delete(visited, t)
+
 	result := []GraphToken{}
 	digIn := reflect.TypeFor[dig.In]()
 	for i := 0; i < t.NumField(); i++ {
@@ -666,9 +669,11 @@ func parseDigInFields(t reflect.Type) []GraphToken {
 
 		name := field.Tag.Get("name")
 		groupTag := field.Tag.Get("group")
-		if groupTag == "" && isDigInStruct(field.Type) {
-			result = append(result, parseDigInFields(field.Type)...)
-			continue
+		if groupTag == "" {
+			if nestedType, ok := digInStructType(field.Type); ok && !visited[nestedType] {
+				result = append(result, parseDigInFields(nestedType, visited)...)
+				continue
+			}
 		}
 		group, _ := parseGroupTag(groupTag)
 		optional := field.Tag.Get("optional") == "true"

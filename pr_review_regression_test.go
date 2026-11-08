@@ -352,7 +352,21 @@ type NestedDigInInner struct {
 
 type nestedDigInOuter struct {
 	NestedDigInInner
-	Opt godi.Optional[int]
+	OptA godi.Optional[int]
+	OptB godi.Optional[int]
+}
+
+type recursiveDigInA struct {
+	dig.In
+	Self *recursiveDigInA
+	Peer *recursiveDigInB
+	Val  int
+}
+
+type recursiveDigInB struct {
+	dig.In
+	Back *recursiveDigInA
+	Text string
 }
 
 func TestGraphNestedDigInAndDeterministicMissingDOT(t *testing.T) {
@@ -360,22 +374,25 @@ func TestGraphNestedDigInAndDeterministicMissingDOT(t *testing.T) {
 
 	deps := godi.CollectDependencies(
 		godi.NewDependency(func(in nestedDigInOuter) bool {
-			_, ok := in.Opt.Get()
-			return in.Name != "" && ok
+			_, okA := in.OptA.Get()
+			_, okB := in.OptB.Get()
+			return in.Name != "" && okA && okB
 		}, godi.WithKey("consumer")),
 	)
 
 	g := godi.BuildGraph(deps)
-	if len(g.Providers) != 1 || len(g.Providers[0].Requires) != 2 {
-		t.Fatalf("expected 2 required tokens from nested dig.In, got %+v", g.Providers)
+	if len(g.Providers) != 1 || len(g.Providers[0].Requires) != 3 {
+		t.Fatalf("expected 3 required tokens from nested dig.In, got %+v", g.Providers)
 	}
 
 	reqs := g.Providers[0].Requires
 	if reqs[0].Type != testTypeString || reqs[0].Name != "service" || reqs[0].Optional {
 		t.Fatalf("unexpected first require token: %+v", reqs[0])
 	}
-	if reqs[1].Type != "*int" || !reqs[1].Optional {
-		t.Fatalf("unexpected optional require token: %+v", reqs[1])
+	for _, req := range reqs[1:] {
+		if req.Type != "*int" || !req.Optional {
+			t.Fatalf("unexpected optional require token: %+v", req)
+		}
 	}
 
 	firstDOT := g.DOT()
@@ -383,6 +400,29 @@ func TestGraphNestedDigInAndDeterministicMissingDOT(t *testing.T) {
 		if got := g.DOT(); got != firstDOT {
 			t.Fatalf("non-deterministic DOT output:\ngot:\n%s\nwant:\n%s", got, firstDOT)
 		}
+	}
+}
+
+func TestBuildGraphRecursiveDigInDoesNotStackOverflow(t *testing.T) {
+	t.Parallel()
+
+	deps := godi.CollectDependencies(
+		godi.NewDependency(func(in recursiveDigInA) bool {
+			return in.Self == nil && in.Peer == nil && in.Val == 0
+		}, godi.WithKey("recursive")),
+	)
+
+	if _, err := godi.NewContainer(godi.WithDependencies(deps)); err == nil {
+		t.Fatal("expected dig to reject pointer to dig.In parameter object")
+	}
+
+	g := godi.BuildGraph(deps)
+	if len(g.Providers) != 1 {
+		t.Fatalf("expected 1 provider node, got %d", len(g.Providers))
+	}
+	dot := g.DOT()
+	if !strings.Contains(dot, "recursive") {
+		t.Fatalf("expected DOT to contain recursive provider node, got:\n%s", dot)
 	}
 }
 
