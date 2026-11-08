@@ -134,6 +134,7 @@ func TestValidateCoversModuleProvidersAndDecorators(t *testing.T) {
 			godi.NewDependency(func() string { return "mod" }, godi.Private()),
 			godi.NewDependency(func(s string) int { return len(s) }),
 			godi.Decorate(func(v int) int { return v + 1 }),
+			godi.NewDependency(func(v int) int64 { return int64(v) }),
 		),
 	}
 
@@ -146,12 +147,19 @@ func TestValidateCoversModuleProvidersAndDecorators(t *testing.T) {
 		t.Fatalf("expected validation to pass, got %v", err)
 	}
 
-	// Root should be able to resolve the exported int, decorated inside module scope.
-	var got int
-	if err := cnt.Invoke(func(v int) { got = v }); err != nil {
+	// Module consumers receive the scope-decorated int, while root sees the exported int directly.
+	var gotRoot int
+	var gotModuleConsumer int64
+	if err := cnt.Invoke(func(v int, d int64) {
+		gotRoot = v
+		gotModuleConsumer = d
+	}); err != nil {
 		t.Fatalf("Invoke error: %v", err)
 	}
-	if got != len("mod") {
-		t.Fatalf("expected int %d, got %d", len("mod"), got)
+	if gotRoot != len("mod") {
+		t.Fatalf("expected root int %d, got %d", len("mod"), gotRoot)
+	}
+	if gotModuleConsumer != int64(len("mod")+1) {
+		t.Fatalf("expected module consumer to receive decorated int %d, got %d", len("mod")+1, gotModuleConsumer)
 	}
 }

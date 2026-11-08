@@ -151,7 +151,7 @@ func (d *Dependency) AddMatchingInterface(as ...any) error {
 		}
 	}
 
-	d.matchingInterfaces = append(d.matchingInterfaces, as...)
+	d.matchingInterfaces = append(slices.Clone(d.matchingInterfaces), as...)
 	return nil
 }
 

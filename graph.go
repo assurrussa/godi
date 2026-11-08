@@ -75,7 +75,7 @@ func (c *Container) GraphModules() map[string]Graph {
 		return map[string]Graph{rootScopeName: BuildGraph(CollectDependencies(c.dependencies...))}
 	}
 
-	globalEntries := buildGlobalEntries(rootEntries, moduleResolutions)
+	globalEntries := buildGlobalEntries(rootEntries, c.modules, moduleResolutions)
 	globalResolution, err := resolveEntries(globalEntries)
 	if err != nil {
 		return map[string]Graph{rootScopeName: BuildGraph(CollectDependencies(c.dependencies...))}
@@ -84,7 +84,9 @@ func (c *Container) GraphModules() map[string]Graph {
 	graphs := map[string]Graph{}
 	graphs[rootScopeName] = buildGraphFromEntries(globalResolution.providers, globalResolution.decorators, nil)
 
-	for moduleName, res := range moduleResolutions {
+	for _, module := range c.modules {
+		moduleName := module.Name
+		res := moduleResolutions[moduleName]
 		entries := moduleGraphEntries(globalResolution.providers, res.providers)
 		decorators := append([]depEntry{}, globalResolution.decorators...)
 		decorators = append(decorators, res.decorators...)
@@ -376,6 +378,7 @@ func (g Graph) DOT() string {
 	}
 
 	missingNodes := map[string]string{}
+	missingOrder := make([]string, 0)
 	for _, edge := range g.Edges {
 		if !edge.Missing {
 			continue
@@ -391,8 +394,10 @@ func (g Graph) DOT() string {
 			Optional: edge.Optional,
 		})
 		missingNodes[id] = label
+		missingOrder = append(missingOrder, id)
 	}
-	for id, label := range missingNodes {
+	for _, id := range missingOrder {
+		label := missingNodes[id]
 		_, _ = fmt.Fprintf(&b, "  \"%s\" [shape=diamond style=dashed label=\"%s\"];\n",
 			escapeDOT(id),
 			escapeDOT(label))
@@ -622,8 +627,8 @@ func parseConstructorInputs(constructor any) []GraphToken {
 	var result []GraphToken
 	for i := 0; i < fnType.NumIn(); i++ {
 		param := fnType.In(i)
-		if isDigInStruct(param) {
-			result = append(result, parseDigInFields(param)...)
+		if structType, ok := digInStructType(param); ok {
+			result = append(result, parseDigInFields(structType, map[reflect.Type]bool{})...)
 			continue
 		}
 		result = append(result, GraphToken{typ: param, Type: param.String()})
@@ -631,32 +636,28 @@ func parseConstructorInputs(constructor any) []GraphToken {
 	return result
 }
 
-func isDigInStruct(t reflect.Type) bool {
+func digInStructType(t reflect.Type) (reflect.Type, bool) {
 	if t == nil {
-		return false
+		return nil, false
 	}
 	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
-	if t.Kind() != reflect.Struct {
-		return false
+	if t.Kind() != reflect.Struct || !dig.IsIn(t) {
+		return nil, false
 	}
-	digIn := reflect.TypeOf(dig.In{})
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		if field.Anonymous && field.Type == digIn {
-			return true
-		}
-	}
-	return false
+	return t, true
 }
 
-func parseDigInFields(t reflect.Type) []GraphToken {
-	if t.Kind() == reflect.Pointer {
-		t = t.Elem()
+func parseDigInFields(t reflect.Type, visited map[reflect.Type]bool) []GraphToken {
+	if visited[t] {
+		return nil
 	}
+	visited[t] = true
+	defer delete(visited, t)
+
 	result := []GraphToken{}
-	digIn := reflect.TypeOf(dig.In{})
+	digIn := reflect.TypeFor[dig.In]()
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
 		if field.Anonymous && field.Type == digIn {
@@ -668,6 +669,12 @@ func parseDigInFields(t reflect.Type) []GraphToken {
 
 		name := field.Tag.Get("name")
 		groupTag := field.Tag.Get("group")
+		if groupTag == "" {
+			if nestedType, ok := digInStructType(field.Type); ok && !visited[nestedType] {
+				result = append(result, parseDigInFields(nestedType, visited)...)
+				continue
+			}
+		}
 		group, _ := parseGroupTag(groupTag)
 		optional := field.Tag.Get("optional") == "true"
 		if group != "" {

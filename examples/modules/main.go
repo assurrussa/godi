@@ -18,8 +18,8 @@ func main() {
 		panic(err)
 	}
 
-	var n int
-	if err := cnt.Invoke(func(v int) { n = v }); err != nil {
+	n, err := cnt.Resolve[int]()
+	if err != nil {
 		panic(err)
 	}
 
@@ -27,7 +27,7 @@ func main() {
 		panic(err)
 	}
 
-	if err := cnt.Invoke(func(_ string) {}); err == nil {
+	if _, err := cnt.Resolve[string](); err == nil {
 		panic("expected private provider to be hidden from root")
 	}
 }

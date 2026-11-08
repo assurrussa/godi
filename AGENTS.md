@@ -8,12 +8,12 @@ It is a lightweight dependency-injection helper built on top of
 
 Keep changes centered on the public library contract:
 
-- dependency registration through `NewDependency`, `Replace`, `Decorate`, and
-  `CollectDependencies`
+- dependency registration through `WithConstructors`, `NewDependency`, `Replace`,
+  `Decorate`, and `CollectDependencies`
 - container construction and mutation through `NewContainer`, `Provide`,
-  `Invoke`, `Validate`, `Runnables`, graph helpers, and container options
+  `Resolve`, `Invoke`, `Validate`, `Runnables`, graph helpers, and container options
 - module scopes through `NewModule`, `WithModules`, and `Private`
-- matching/interface binding through `WithMatch`, `WithMatchings`, and
+- matching/interface binding through `As`, `WithMatch`, `WithMatchings`, and
   `NewMatching`
 - lifecycle helpers, optional dependency wrappers, override detection, and DOT
   graph export
