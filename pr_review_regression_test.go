@@ -1,10 +1,13 @@
 package godi_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -281,5 +284,122 @@ func TestLifecycleStopOnlyPanicKeepsRegistrationIndex(t *testing.T) {
 	}
 	if stops != 1 {
 		t.Fatalf("stop-only cleanup ran %d times", stops)
+	}
+}
+
+func TestWithMatchingsValidatedWithoutProvideDependencies(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string][]godi.ContainerOption{
+		"empty container invalid type": {
+			godi.WithMatchings("not-a-matching"),
+		},
+		"empty container invalid Matching": {
+			godi.WithMatchings(godi.NewMatching(123, new(io.Reader))),
+		},
+		"decorate only invalid Matching": {
+			godi.WithMatchings("not-a-matching"),
+			godi.WithConstructors(godi.Decorate(func(v int) int { return v })),
+		},
+	}
+
+	for name, opts := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if _, err := godi.NewContainer(opts...); err == nil {
+				t.Fatal("expected error for invalid WithMatchings")
+			}
+		})
+	}
+}
+
+func TestWithMatchingsDoesNotMutateSharedDependencySlice(t *testing.T) {
+	t.Parallel()
+
+	base := godi.NewDependency(func() *bytes.Buffer { return new(bytes.Buffer) }).
+		As[io.Reader]().As[io.Writer]().As[io.ByteReader]()
+	wantBase := []reflect.Type{
+		reflect.TypeFor[io.Reader](),
+		reflect.TypeFor[io.Writer](),
+		reflect.TypeFor[io.ByteReader](),
+	}
+
+	cnt, err := godi.NewContainer(
+		godi.WithMatchings(new(io.ByteWriter)),
+		godi.WithConstructors(base),
+	)
+	if err != nil {
+		t.Fatalf("NewContainer: %v", err)
+	}
+	if _, err := cnt.Resolve[io.ByteWriter](); err != nil {
+		t.Fatalf("Resolve io.ByteWriter: %v", err)
+	}
+
+	sibling := base.As[io.StringWriter]()
+	if !slices.Equal(base.ExposedTypes(), wantBase) {
+		t.Fatalf("WithMatchings mutated base dependency: got %v, want %v", base.ExposedTypes(), wantBase)
+	}
+	wantSibling := append(slices.Clone(wantBase), reflect.TypeFor[io.StringWriter]())
+	if !slices.Equal(sibling.ExposedTypes(), wantSibling) {
+		t.Fatalf("WithMatchings polluted sibling chain: got %v, want %v", sibling.ExposedTypes(), wantSibling)
+	}
+}
+
+type NestedDigInInner struct {
+	dig.In
+	Name string `name:"service"`
+}
+
+type nestedDigInOuter struct {
+	NestedDigInInner
+	Opt godi.Optional[int]
+}
+
+func TestGraphNestedDigInAndDeterministicMissingDOT(t *testing.T) {
+	t.Parallel()
+
+	deps := godi.CollectDependencies(
+		godi.NewDependency(func(in nestedDigInOuter) bool {
+			_, ok := in.Opt.Get()
+			return in.Name != "" && ok
+		}, godi.WithKey("consumer")),
+	)
+
+	g := godi.BuildGraph(deps)
+	if len(g.Providers) != 1 || len(g.Providers[0].Requires) != 2 {
+		t.Fatalf("expected 2 required tokens from nested dig.In, got %+v", g.Providers)
+	}
+
+	reqs := g.Providers[0].Requires
+	if reqs[0].Type != testTypeString || reqs[0].Name != "service" || reqs[0].Optional {
+		t.Fatalf("unexpected first require token: %+v", reqs[0])
+	}
+	if reqs[1].Type != "*int" || !reqs[1].Optional {
+		t.Fatalf("unexpected optional require token: %+v", reqs[1])
+	}
+
+	firstDOT := g.DOT()
+	for range 10 {
+		if got := g.DOT(); got != firstDOT {
+			t.Fatalf("non-deterministic DOT output:\ngot:\n%s\nwant:\n%s", got, firstDOT)
+		}
+	}
+}
+
+func TestModuleOrderDeterminismInValidateAndGroups(t *testing.T) {
+	t.Parallel()
+
+	modA := godi.NewModule("a", godi.NewSingleDependency(func(_ int) string { return "a" }))
+	modB := godi.NewModule("b", godi.NewSingleDependency(func(_ bool) float64 { return 1 }))
+
+	cnt, err := godi.NewContainer(godi.WithModules(modA, modB))
+	if err != nil {
+		t.Fatalf("NewContainer: %v", err)
+	}
+	for range 10 {
+		err := cnt.Validate()
+		if err == nil || !strings.HasPrefix(err.Error(), "module a:") {
+			t.Fatalf("expected Validate to fail on module a first, got %v", err)
+		}
 	}
 }

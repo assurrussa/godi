@@ -205,7 +205,6 @@ linters:
     paths:
       - third_party$
       - builtin$
-      - examples$
 issues:
   max-same-issues: 0
 formatters:
@@ -226,4 +225,3 @@ formatters:
     paths:
       - third_party$
       - builtin$
-      - examples$

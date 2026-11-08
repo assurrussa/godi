@@ -32,6 +32,10 @@ func NewContainer(opts ...ContainerOption) (*Container, error) {
 		opt(&cfg)
 	}
 
+	if err := validateMatchings(cfg.matchings); err != nil {
+		return nil, err
+	}
+
 	modules := make([]Module, 0, len(cfg.modules))
 	moduleNames := make(map[string]bool, len(cfg.modules))
 	for _, module := range cfg.modules {
@@ -143,11 +147,11 @@ func (c *Container) Validate() error {
 		}
 	}
 
-	for moduleName, providers := range built.moduleProviders {
-		scope := built.scopes[moduleName]
-		for _, provider := range providers {
+	for _, module := range c.modules {
+		scope := built.scopes[module.Name]
+		for _, provider := range built.moduleProviders[module.Name] {
 			if err := invokeProvider(scope, provider.dep); err != nil {
-				return fmt.Errorf("module %s: %w", moduleName, err)
+				return fmt.Errorf("module %s: %w", module.Name, err)
 			}
 		}
 	}
@@ -170,7 +174,7 @@ func (c *Container) build(dry bool) (*buildResult, error) {
 		return nil, err
 	}
 
-	globalEntries := buildGlobalEntries(rootEntries, moduleResolutions)
+	globalEntries := buildGlobalEntries(rootEntries, c.modules, moduleResolutions)
 	globalResolution, err := resolveEntries(globalEntries)
 	if err != nil {
 		return nil, err
@@ -185,12 +189,12 @@ func (c *Container) build(dry bool) (*buildResult, error) {
 		return nil, err
 	}
 
-	moduleProviders, err := provideModuleProviders(scopes, moduleResolutions, globalResolution)
+	moduleProviders, err := provideModuleProviders(c.modules, scopes, moduleResolutions, globalResolution)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := applyDecorators(root, scopes, globalResolution, moduleResolutions); err != nil {
+	if err := applyDecorators(c.modules, root, scopes, globalResolution, moduleResolutions); err != nil {
 		return nil, err
 	}
 
@@ -235,15 +239,16 @@ func buildModuleResolutions(modules []Module) (map[string]resolvedScope, error) 
 	return moduleResolutions, nil
 }
 
-func buildGlobalEntries(rootEntries []depEntry, moduleResolutions map[string]resolvedScope) []depEntry {
+func buildGlobalEntries(rootEntries []depEntry, modules []Module, moduleResolutions map[string]resolvedScope) []depEntry {
 	globalEntries := make([]depEntry, 0, len(rootEntries))
 	globalEntries = append(globalEntries, rootEntries...)
-	for moduleName, res := range moduleResolutions {
+	for _, module := range modules {
+		res := moduleResolutions[module.Name]
 		for _, provider := range res.providers {
 			if provider.dep.private {
 				continue
 			}
-			provider.module = moduleName
+			provider.module = module.Name
 			globalEntries = append(globalEntries, provider)
 		}
 	}
@@ -279,12 +284,15 @@ func provideRootProviders(root *dig.Container, resolution resolvedScope) ([]depE
 }
 
 func provideModuleProviders(
+	modules []Module,
 	scopes map[string]*dig.Scope,
 	moduleResolutions map[string]resolvedScope,
 	globalResolution resolvedScope,
 ) (map[string][]depEntry, error) {
 	moduleProviders := map[string][]depEntry{}
-	for moduleName, res := range moduleResolutions {
+	for _, module := range modules {
+		moduleName := module.Name
+		res := moduleResolutions[moduleName]
 		availableSlots := mergeSlots(res.slots, globalResolution.slots)
 		if err := validateDecorators(res.decorators, availableSlots); err != nil {
 			return nil, fmt.Errorf("module %s: %w", moduleName, err)
@@ -319,6 +327,7 @@ func provideModuleProviders(
 }
 
 func applyDecorators(
+	modules []Module,
 	root *dig.Container,
 	scopes map[string]*dig.Scope,
 	globalResolution resolvedScope,
@@ -329,8 +338,9 @@ func applyDecorators(
 			return err
 		}
 	}
-	for moduleName, res := range moduleResolutions {
-		scope := scopes[moduleName]
+	for _, module := range modules {
+		scope := scopes[module.Name]
+		res := moduleResolutions[module.Name]
 		for _, decorator := range res.decorators {
 			if err := scope.Decorate(decorator.dep.constructor); err != nil {
 				return err
@@ -357,18 +367,34 @@ func applyMatchingsToList(deps []Dependency, matchings []any) ([]Dependency, err
 	return result, nil
 }
 
+func validateMatchings(matchings []any) error {
+	for _, matching := range matchings {
+		if m, ok := matching.(Matching); ok {
+			if err := m.Error(); err != nil {
+				return fmt.Errorf("matching has an error: %w", err)
+			}
+			continue
+		}
+		if isPointerToInterface(matching) {
+			continue
+		}
+		return fmt.Errorf("matching must be a pointer to interface or Matching, got %T", matching)
+	}
+	return nil
+}
+
 func applyMatchings(dependency *Dependency, matchings []any) error {
 	if dependency.kind == dependencyKindDecorate {
 		return nil
+	}
+	if err := validateMatchings(matchings); err != nil {
+		return err
 	}
 
 	var asInterfaces []any
 
 	for _, matching := range matchings {
 		if m, ok := matching.(Matching); ok {
-			if err := m.Error(); err != nil {
-				return fmt.Errorf("matching has an error: %w", err)
-			}
 			depType := dependency.Type()
 			if depType == m.Origin() || (depType != nil && depType.Kind() == reflect.Pointer && depType.Elem() == m.Origin()) {
 				asInterfaces = append(asInterfaces, m.interfaces...)
@@ -376,15 +402,10 @@ func applyMatchings(dependency *Dependency, matchings []any) error {
 			continue
 		}
 
-		if isPointerToInterface(matching) {
-			t := dependency.Type()
-			if t != nil && t.Implements(reflect.TypeOf(matching).Elem()) {
-				asInterfaces = append(asInterfaces, matching)
-			}
-			continue
+		t := dependency.Type()
+		if t != nil && t.Implements(reflect.TypeOf(matching).Elem()) {
+			asInterfaces = append(asInterfaces, matching)
 		}
-
-		return fmt.Errorf("matching must be a pointer to interface or Matching, got %T", matching)
 	}
 
 	if len(asInterfaces) == 0 {

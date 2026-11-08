@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"io"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 
 	"go.uber.org/dig"
@@ -18,39 +18,35 @@ type out struct {
 	Items []string `group:"items,flatten"`
 }
 
+type inParams struct {
+	dig.In
+	Reader io.Reader
+	Named  string   `name:"named"`
+	Items  []string `group:"items"`
+}
+
 func main() {
 	cnt, err := godi.NewContainer(
 		godi.WithMatchings(new(io.Reader)),
-		godi.WithDependencies(
-			godi.CollectDependencies(
-				godi.NewDependency(func() *bytes.Buffer { return bytes.NewBufferString("ok") }),
-				godi.NewDependency(func() out {
-					return out{Named: "hello", Items: []string{"a", "b"}}
-				}),
-			),
+		godi.WithConstructors(
+			func() *bytes.Buffer { return bytes.NewBufferString("ok") },
+			func() out {
+				return out{Named: "hello", Items: []string{"a", "b"}}
+			},
 		),
 	)
 	if err != nil {
 		panic(err)
 	}
 
-	var named string
-	var items []string
-	if err := cnt.Invoke(func(in struct {
-		dig.In
-		Reader io.Reader
-		Named  string   `name:"named"`
-		Items  []string `group:"items"`
-	},
-	) {
-		named = in.Named
-		items = in.Items
-	}); err != nil {
+	resolved, err := cnt.Resolve[inParams]()
+	if err != nil {
 		panic(err)
 	}
 
-	sort.Strings(items)
-	outStr := named + ":" + strings.Join(items, ",") + "\n"
+	items := slices.Clone(resolved.Items)
+	slices.Sort(items)
+	outStr := resolved.Named + ":" + strings.Join(items, ",") + "\n"
 	if _, err := os.Stdout.WriteString(outStr); err != nil {
 		panic(err)
 	}

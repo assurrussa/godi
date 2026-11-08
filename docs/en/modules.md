@@ -42,6 +42,7 @@ This means:
 
 - if multiple modules export the same slot, container creation fails (duplicate provider) unless you explicitly model override via `Replace`
 - private providers never leak to root
+- `Decorate` inside a module applies to that module's scope (consumers in the module receive the decorated value); register `Decorate` at the container level to decorate globally
 
 
 Module names must be non-empty and unique within a container. The name `root`

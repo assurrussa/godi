@@ -2,8 +2,5 @@
 .idea
 .vscode
 __debug_*
-configs/config.toml
-sportsite
-node_modules
 tmp/
 cover.html
